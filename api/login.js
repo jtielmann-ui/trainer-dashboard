@@ -56,9 +56,8 @@ module.exports = function(req, res) {
 
   makeRequest({
     hostname: 'api.podio.com',
-    path: '/app/30676083/filter',
-    method: 'GET',
-    headers: { 'Authorization': 'Bearer ' + CONTACT_APP_TOKEN }
+    path: '/app/30676083/filter?app_token=' + CONTACT_APP_TOKEN,
+    method: 'GET'
   }).then(function(contactResponse) {
     console.log('Contact response status:', contactResponse.status);
     
@@ -90,9 +89,8 @@ module.exports = function(req, res) {
   }).then(function(contact) {
     return makeRequest({
       hostname: 'api.podio.com',
-      path: '/app/26863984/filter',
-      method: 'GET',
-      headers: { 'Authorization': 'Bearer ' + STAFF_APP_TOKEN }
+      path: '/app/26863984/filter?app_token=' + STAFF_APP_TOKEN,
+      method: 'GET'
     }).then(function(staffResponse) {
       if (!staffResponse.data || !staffResponse.data.items) {
         throw new Error('No staff found');
@@ -123,9 +121,8 @@ module.exports = function(req, res) {
   }).then(function(staffData) {
     return makeRequest({
       hostname: 'api.podio.com',
-      path: '/app/24013170/filter',
-      method: 'GET',
-      headers: { 'Authorization': 'Bearer ' + EVENTS_APP_TOKEN }
+      path: '/app/24013170/filter?app_token=' + EVENTS_APP_TOKEN,
+      method: 'GET'
     }).then(function(classResponse) {
       if (!classResponse.data || !classResponse.data.items) {
         res.status(200).json({ success: true, trainerName: staffData.contactName, classes: [] });
