@@ -2,6 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const dotenv = require('dotenv');
+const path = require('path');
+
+dotenv.config();
+
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// Serve static files (index.html)
+app.use(express.static(path.join(__dirname, '.')));
+
+// ... rest of your code ...
+const express = require('express');
+const cors = require('cors');
+const fetch = require('node-fetch');
+const dotenv = require('dotenv');
 
 dotenv.config();
 
