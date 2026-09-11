@@ -148,7 +148,7 @@ module.exports = function(req, res) {
           trainersField.values.forEach(function(tv) {
             if (tv.value) {
               var staffId = tv.value.item_id;
-              var trainerName = staffMap[staffId] || 'Unknown';
+              var trainerName = staffMap[staffId] || 'Past 30-days of Classes';
               
               if (!trainerClasses[trainerName]) {
                 trainerClasses[trainerName] = [];
