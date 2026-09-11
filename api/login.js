@@ -53,6 +53,13 @@ function parseLocalDate(dateString) {
   return date;
 }
 
+function dateToLocalString(date) {
+  var year = date.getFullYear();
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+}
+
 function calculatePayrollDate(classDate) {
   var basePayroll = new Date(2026, 8, 16);
   var payrollDate = new Date(basePayroll);
@@ -157,9 +164,9 @@ module.exports = function(req, res) {
               
               trainerClasses[trainerName].push({
                 className: className,
-                startDate: startDate.toISOString(),
-                endDate: endDate.toISOString(),
-                payrollDate: payrollDate.toISOString(),
+                startDate: dateToLocalString(startDate),
+                endDate: dateToLocalString(endDate),
+                payrollDate: dateToLocalString(payrollDate),
                 isPaid: payrollValue === 'Paid'
               });
             }
