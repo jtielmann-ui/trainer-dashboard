@@ -44,11 +44,19 @@ function getPodioAccessToken() {
   });
 }
 
+function parseLocalDate(dateString) {
+  var parts = dateString.split('-');
+  var year = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10) - 1;
+  var day = parseInt(parts[2], 10);
+  var date = new Date(year, month, day, 0, 0, 0, 0);
+  return date;
+}
+
 function calculatePayrollDate(classDate) {
   var basePayroll = new Date(2026, 8, 16);
-  var classDateObj = new Date(classDate);
   var payrollDate = new Date(basePayroll);
-  while (payrollDate < classDateObj) {
+  while (payrollDate < classDate) {
     payrollDate.setDate(payrollDate.getDate() + 14);
   }
   return payrollDate;
@@ -112,12 +120,8 @@ module.exports = function(req, res) {
 
     var today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    var afterDateFilter = 0;
-    var afterStatusFilter = 0;
 
     var trainerClasses = {};
-    var loggedOnce = false;
 
     if (eventsData.items) {
       eventsData.items.forEach(function(item) {
@@ -130,20 +134,12 @@ module.exports = function(req, res) {
 
         if (!datesField || !datesField.values) return;
 
-        var startDate = new Date(datesField.values[0].start);
-        startDate.setHours(0, 0, 0, 0);
-
+        var startDate = parseLocalDate(datesField.values[0].start);
         if (startDate >= today) return;
-        afterDateFilter++;
-
-        if (!loggedOnce && statusField) {
-          console.log('Status field structure:', JSON.stringify(statusField.values[0]));
-          loggedOnce = true;
-        }
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
 
-        var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
+        var endDate = datesField.values[0].end ? parseLocalDate(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
         var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
 
@@ -172,7 +168,6 @@ module.exports = function(req, res) {
       });
     }
 
-    console.log('After date filter (past only):', afterDateFilter);
     console.log('Final trainers:', Object.keys(trainerClasses).length);
 
     res.status(200).json({ success: true, trainerClasses: trainerClasses });
