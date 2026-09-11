@@ -1,7 +1,4 @@
 {
-  "buildCommand": "npm install",
-  "env": {
-    "PODIO_CLIENT_ID": "@podio_client_id",
-    "PODIO_CLIENT_SECRET": "@podio_client_secret"
-  }
+  "buildCommand": "exit 0",
+  "outputDirectory": "."
 }
