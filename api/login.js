@@ -44,11 +44,6 @@ function getPodioAccessToken() {
   });
 }
 
-function getTodayString() {
-  var today = new Date();
-  return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-}
-
 function calculatePayrollDate(classDate) {
   var basePayroll = new Date(2026, 8, 16);
   var classDateObj = new Date(classDate);
@@ -71,9 +66,6 @@ module.exports = function(req, res) {
 
   getPodioAccessToken().then(function(token) {
     console.log('Got Podio token successfully');
-    
-    var todayStr = getTodayString();
-    console.log('Today: ' + todayStr);
 
     return Promise.all([
       makeRequest('api.podio.com', '/item/app/26863984/filter/', 'POST', {
@@ -87,12 +79,7 @@ module.exports = function(req, res) {
       makeRequest('api.podio.com', '/item/app/24013170/filter/', 'POST', {
         'Content-Type': 'application/json',
         'Authorization': 'OAuth2 ' + token
-      }, JSON.stringify({
-        filters: {
-          '201834925': { to: todayStr }
-        },
-        limit: 1000
-      }))
+      }, JSON.stringify({ limit: 1000 }))
     ]);
   }).then(function(responses) {
     var staffData = responses[0].data;
@@ -101,7 +88,7 @@ module.exports = function(req, res) {
 
     console.log('Staff items:', staffData.items ? staffData.items.length : 0);
     console.log('Contact items:', contactData.items ? contactData.items.length : 0);
-    console.log('Events items (past only):', eventsData.items ? eventsData.items.length : 0);
+    console.log('ALL Events items:', eventsData.items ? eventsData.items.length : 0);
 
     var contactMap = {};
     if (contactData.items) {
@@ -124,6 +111,9 @@ module.exports = function(req, res) {
       });
     }
 
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     var trainerClasses = {};
 
     if (eventsData.items) {
@@ -137,6 +127,11 @@ module.exports = function(req, res) {
 
         if (!datesField || !datesField.values) return;
 
+        var startDate = new Date(datesField.values[0].start);
+        startDate.setHours(0, 0, 0, 0);
+
+        if (startDate >= today) return;
+
         var statusText = null;
         if (statusField && statusField.values && statusField.values[0]) {
           statusText = statusField.values[0].value || statusField.values[0].text;
@@ -145,7 +140,6 @@ module.exports = function(req, res) {
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
 
-        var startDate = new Date(datesField.values[0].start);
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
         var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
