@@ -44,26 +44,9 @@ function getPodioAccessToken() {
   });
 }
 
-function getPodioItem(token, itemId) {
-  return makeRequest('api.podio.com', '/item/' + itemId, 'GET', {
-    'Authorization': 'OAuth2 ' + token
-  }).then(function(response) {
-    if (response.status === 200) {
-      return response.data;
-    }
-    return null;
-  });
-}
-
-function getClassTypeName(token, classItemId) {
-  return getPodioItem(token, classItemId).then(function(item) {
-    if (!item || !item.fields) return null;
-    var nameField = item.fields.find(function(f) { return f.field_id === 247305074; });
-    if (nameField && nameField.values && nameField.values[0]) {
-      return nameField.values[0].value;
-    }
-    return null;
-  });
+function getTodayString() {
+  var today = new Date();
+  return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 }
 
 function calculatePayrollDate(classDate) {
@@ -86,13 +69,11 @@ module.exports = function(req, res) {
     return;
   }
 
-  var token;
-  var contactMap = {};
-  var staffMap = {};
-
-  getPodioAccessToken().then(function(accessToken) {
-    token = accessToken;
+  getPodioAccessToken().then(function(token) {
     console.log('Got Podio token successfully');
+    
+    var todayStr = getTodayString();
+    console.log('Today: ' + todayStr);
 
     return Promise.all([
       makeRequest('api.podio.com', '/item/app/26863984/filter/', 'POST', {
@@ -106,7 +87,12 @@ module.exports = function(req, res) {
       makeRequest('api.podio.com', '/item/app/24013170/filter/', 'POST', {
         'Content-Type': 'application/json',
         'Authorization': 'OAuth2 ' + token
-      }, JSON.stringify({}))
+      }, JSON.stringify({
+        filters: {
+          '201834925': { to: todayStr }
+        },
+        limit: 1000
+      }))
     ]);
   }).then(function(responses) {
     var staffData = responses[0].data;
@@ -115,8 +101,9 @@ module.exports = function(req, res) {
 
     console.log('Staff items:', staffData.items ? staffData.items.length : 0);
     console.log('Contact items:', contactData.items ? contactData.items.length : 0);
-    console.log('Events items (before filtering):', eventsData.items ? eventsData.items.length : 0);
+    console.log('Events items (past only):', eventsData.items ? eventsData.items.length : 0);
 
+    var contactMap = {};
     if (contactData.items) {
       contactData.items.forEach(function(item) {
         var nameField = item.fields.find(function(f) { return f.field_id === 276275551; });
@@ -126,6 +113,7 @@ module.exports = function(req, res) {
       });
     }
 
+    var staffMap = {};
     if (staffData.items) {
       staffData.items.forEach(function(item) {
         var contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
@@ -136,112 +124,56 @@ module.exports = function(req, res) {
       });
     }
 
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    var afterDateFilter = 0;
-    var afterStatusFilter = 0;
-    var eventsToProcess = [];
+    var trainerClasses = {};
 
     if (eventsData.items) {
       eventsData.items.forEach(function(item) {
         var datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
         var statusField = item.fields.find(function(f) { return f.field_id === 215214960; });
         var classTypeField = item.fields.find(function(f) { return f.field_id === 247306182; });
+        var trainersField = item.fields.find(function(f) { return f.field_id === 232176709; });
         var classNameField = item.fields.find(function(f) { return f.field_id === 202573663; });
+        var payrollField = item.fields.find(function(f) { return f.field_id === 278105426; });
 
-        if (!datesField || !datesField.values) {
-          console.log('[DEBUG] Event ' + item.item_id + ' has no dates field');
-          return;
-        }
-
-        var startDate = new Date(datesField.values[0].start);
-        startDate.setHours(0, 0, 0, 0);
-
-        if (startDate >= today) {
-          console.log('[DEBUG] Event "' + (classNameField && classNameField.values ? classNameField.values[0].value : 'unknown') + '" (' + item.item_id + ') is FUTURE, skipped');
-          return;
-        }
-        afterDateFilter++;
+        if (!datesField || !datesField.values) return;
 
         var statusText = null;
         if (statusField && statusField.values && statusField.values[0]) {
           statusText = statusField.values[0].value || statusField.values[0].text;
         }
-        console.log('[DEBUG] Event "' + (classNameField && classNameField.values ? classNameField.values[0].value : 'unknown') + '" status: ' + (statusText || 'NONE'));
+        if (statusText !== 'Private Client' && statusText !== 'Open') return;
 
-        if (!statusText || (statusText !== 'Private Client' && statusText !== 'Open')) {
-          console.log('[DEBUG] Event "' + (classNameField && classNameField.values ? classNameField.values[0].value : 'unknown') + '" (' + item.item_id + ') status NOT matching, skipped');
-          return;
-        }
-        afterStatusFilter++;
+        if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
 
-        var classTypeItemId = null;
-        if (classTypeField && classTypeField.values && classTypeField.values[0] && classTypeField.values[0].value) {
-          classTypeItemId = classTypeField.values[0].value.item_id;
-        }
+        var startDate = new Date(datesField.values[0].start);
+        var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
+        var payrollDate = calculatePayrollDate(startDate);
+        var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
 
-        if (classTypeItemId) {
-          eventsToProcess.push({ item: item });
+        var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
+
+        if (trainersField && trainersField.values) {
+          trainersField.values.forEach(function(tv) {
+            if (tv.value) {
+              var staffId = tv.value.item_id;
+              var trainerName = staffMap[staffId] || 'Unknown';
+              
+              if (!trainerClasses[trainerName]) {
+                trainerClasses[trainerName] = [];
+              }
+              
+              trainerClasses[trainerName].push({
+                className: className,
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                payrollDate: payrollDate.toISOString(),
+                isPaid: payrollValue === 'Paid'
+              });
+            }
+          });
         }
       });
     }
-
-    console.log('[DEBUG] After date filter: ' + afterDateFilter + ' events');
-    console.log('[DEBUG] After status filter: ' + afterStatusFilter + ' events');
-    console.log('[DEBUG] Events to process class types: ' + eventsToProcess.length);
-
-    return Promise.all(eventsToProcess.map(function(e) {
-      var classTypeItemId = e.item.fields.find(function(f) { return f.field_id === 247306182; }).values[0].value.item_id;
-      return getClassTypeName(token, classTypeItemId).then(function(name) {
-        console.log('[DEBUG] Class type name: ' + (name || 'null'));
-        return { item: e.item, classTypeName: name };
-      });
-    }));
-  }).then(function(processedEvents) {
-    console.log('[DEBUG] Processed events with class types: ' + processedEvents.length);
-
-    var trainerClasses = {};
-
-    processedEvents.forEach(function(e) {
-      if (e.classTypeName === 'Event') {
-        console.log('[DEBUG] Skipping event because class type name is "Event"');
-        return;
-      }
-
-      var item = e.item;
-      var datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
-      var trainersField = item.fields.find(function(f) { return f.field_id === 232176709; });
-      var classNameField = item.fields.find(function(f) { return f.field_id === 202573663; });
-      var payrollField = item.fields.find(function(f) { return f.field_id === 278105426; });
-
-      var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
-      var startDate = new Date(datesField.values[0].start);
-      var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
-      var payrollDate = calculatePayrollDate(startDate);
-      var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
-
-      if (trainersField && trainersField.values) {
-        trainersField.values.forEach(function(tv) {
-          if (tv.value) {
-            var staffId = tv.value.item_id;
-            var trainerName = staffMap[staffId] || 'Unknown';
-            
-            if (!trainerClasses[trainerName]) {
-              trainerClasses[trainerName] = [];
-            }
-            
-            trainerClasses[trainerName].push({
-              className: className,
-              startDate: startDate.toISOString(),
-              endDate: endDate.toISOString(),
-              payrollDate: payrollDate.toISOString(),
-              isPaid: payrollValue === 'Paid'
-            });
-          }
-        });
-      }
-    });
 
     console.log('Final trainers:', Object.keys(trainerClasses).length);
 
