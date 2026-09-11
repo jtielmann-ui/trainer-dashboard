@@ -115,9 +115,9 @@ module.exports = function(req, res) {
     
     var afterDateFilter = 0;
     var afterStatusFilter = 0;
-    var afterClassTypeFilter = 0;
 
     var trainerClasses = {};
+    var loggedOnce = false;
 
     if (eventsData.items) {
       eventsData.items.forEach(function(item) {
@@ -136,16 +136,12 @@ module.exports = function(req, res) {
         if (startDate >= today) return;
         afterDateFilter++;
 
-        var statusText = null;
-        if (statusField && statusField.values && statusField.values[0]) {
-          statusText = statusField.values[0].value || statusField.values[0].text;
+        if (!loggedOnce && statusField) {
+          console.log('Status field structure:', JSON.stringify(statusField.values[0]));
+          loggedOnce = true;
         }
-        console.log('Event status: ' + (statusText || 'null'));
-        if (statusText !== 'Private Client' && statusText !== 'Open') return;
-        afterStatusFilter++;
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
-        afterClassTypeFilter++;
 
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
@@ -177,8 +173,6 @@ module.exports = function(req, res) {
     }
 
     console.log('After date filter (past only):', afterDateFilter);
-    console.log('After status filter:', afterStatusFilter);
-    console.log('After class type filter:', afterClassTypeFilter);
     console.log('Final trainers:', Object.keys(trainerClasses).length);
 
     res.status(200).json({ success: true, trainerClasses: trainerClasses });
