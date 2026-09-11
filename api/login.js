@@ -23,16 +23,6 @@ function makeRequest(options, body) {
   });
 }
 
-function calculatePayrollDate(classDate) {
-  var basePayroll = new Date(2026, 8, 16);
-  var classDateObj = new Date(classDate);
-  var payrollDate = new Date(basePayroll);
-  while (payrollDate < classDateObj) {
-    payrollDate.setDate(payrollDate.getDate() + 14);
-  }
-  return payrollDate;
-}
-
 module.exports = function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -76,6 +66,10 @@ module.exports = function(req, res) {
     var contactData = responses[1].data;
     var eventsData = responses[2].data;
 
+    console.log('Staff items:', staffData.items ? staffData.items.length : 0);
+    console.log('Contact items:', contactData.items ? contactData.items.length : 0);
+    console.log('Events items:', eventsData.items ? eventsData.items.length : 0);
+
     var contactMap = {};
     if (contactData.items) {
       contactData.items.forEach(function(item) {
@@ -85,6 +79,7 @@ module.exports = function(req, res) {
         }
       });
     }
+    console.log('Contact map:', Object.keys(contactMap).length);
 
     var staffMap = {};
     if (staffData.items) {
@@ -96,6 +91,7 @@ module.exports = function(req, res) {
         }
       });
     }
+    console.log('Staff map:', Object.keys(staffMap).length);
 
     var trainerClasses = {};
     var thirtyDaysAgo = new Date();
@@ -115,7 +111,6 @@ module.exports = function(req, res) {
 
         var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
-        var payrollDate = calculatePayrollDate(startDate);
         var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
 
         if (trainersField && trainersField.values) {
@@ -132,7 +127,7 @@ module.exports = function(req, res) {
                 className: className,
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),
-                payrollDate: payrollDate.toISOString(),
+                payrollValue: payrollValue,
                 isPaid: payrollValue === 'Paid'
               });
             }
@@ -141,7 +136,9 @@ module.exports = function(req, res) {
       });
     }
 
-    res.status(200).json({ success: true, trainerClasses: trainerClasses });
+    console.log('Final trainers:', Object.keys(trainerClasses).length);
+
+    res.status(200).json({ success: true, trainerClasses: trainerClasses, debug: { staff: staffData.items ? staffData.items.length : 0, contacts: contactData.items ? contactData.items.length : 0, events: eventsData.items ? eventsData.items.length : 0 } });
   }).catch(function(error) {
     console.error('Error:', error.message);
     res.status(500).json({ error: error.message });
