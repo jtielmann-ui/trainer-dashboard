@@ -44,6 +44,28 @@ function getPodioAccessToken() {
   });
 }
 
+function getPodioItem(token, itemId) {
+  return makeRequest('api.podio.com', '/item/' + itemId, 'GET', {
+    'Authorization': 'OAuth2 ' + token
+  }).then(function(response) {
+    if (response.status === 200) {
+      return response.data;
+    }
+    return null;
+  });
+}
+
+function getClassTypeName(token, classItemId) {
+  return getPodioItem(token, classItemId).then(function(item) {
+    if (!item || !item.fields) return null;
+    var nameField = item.fields.find(function(f) { return f.field_id === 247305074; });
+    if (nameField && nameField.values && nameField.values[0]) {
+      return nameField.values[0].value;
+    }
+    return null;
+  });
+}
+
 function calculatePayrollDate(classDate) {
   var basePayroll = new Date(2026, 8, 16);
   var classDateObj = new Date(classDate);
@@ -64,7 +86,12 @@ module.exports = function(req, res) {
     return;
   }
 
-  getPodioAccessToken().then(function(token) {
+  var token;
+  var contactMap = {};
+  var staffMap = {};
+
+  getPodioAccessToken().then(function(accessToken) {
+    token = accessToken;
     console.log('Got Podio token successfully');
 
     return Promise.all([
@@ -88,9 +115,8 @@ module.exports = function(req, res) {
 
     console.log('Staff items:', staffData.items ? staffData.items.length : 0);
     console.log('Contact items:', contactData.items ? contactData.items.length : 0);
-    console.log('Events items:', eventsData.items ? eventsData.items.length : 0);
+    console.log('Events items (before filtering):', eventsData.items ? eventsData.items.length : 0);
 
-    var contactMap = {};
     if (contactData.items) {
       contactData.items.forEach(function(item) {
         var nameField = item.fields.find(function(f) { return f.field_id === 276275551; });
@@ -100,7 +126,6 @@ module.exports = function(req, res) {
       });
     }
 
-    var staffMap = {};
     if (staffData.items) {
       staffData.items.forEach(function(item) {
         var contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
@@ -111,49 +136,85 @@ module.exports = function(req, res) {
       });
     }
 
-    var trainerClasses = {};
-    var thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
 
+    var eventsToProcess = [];
     if (eventsData.items) {
       eventsData.items.forEach(function(item) {
         var datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
-        var trainersField = item.fields.find(function(f) { return f.field_id === 232176709; });
-        var classNameField = item.fields.find(function(f) { return f.field_id === 202573663; });
-        var payrollField = item.fields.find(function(f) { return f.field_id === 278105426; });
+        var statusField = item.fields.find(function(f) { return f.field_id === 215214960; });
+        var classTypeField = item.fields.find(function(f) { return f.field_id === 247306182; });
 
         if (!datesField || !datesField.values) return;
 
         var startDate = new Date(datesField.values[0].start);
-        if (startDate < thirtyDaysAgo) return;
+        startDate.setHours(0, 0, 0, 0);
 
-        var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
-        var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
-        var payrollDate = calculatePayrollDate(startDate);
-        var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
+        if (startDate >= today) return;
 
-        if (trainersField && trainersField.values) {
-          trainersField.values.forEach(function(tv) {
-            if (tv.value) {
-              var staffId = tv.value.item_id;
-              var trainerName = staffMap[staffId] || 'Unknown';
-              
-              if (!trainerClasses[trainerName]) {
-                trainerClasses[trainerName] = [];
-              }
-              
-              trainerClasses[trainerName].push({
-                className: className,
-                startDate: startDate.toISOString(),
-                endDate: endDate.toISOString(),
-                payrollDate: payrollDate.toISOString(),
-                isPaid: payrollValue === 'Paid'
-              });
-            }
-          });
+        var statusText = null;
+        if (statusField && statusField.values && statusField.values[0]) {
+          statusText = statusField.values[0].value || statusField.values[0].text;
+        }
+        if (!statusText || (statusText !== 'Private Client' && statusText !== 'Open')) return;
+
+        var classTypeItemId = null;
+        if (classTypeField && classTypeField.values && classTypeField.values[0] && classTypeField.values[0].value) {
+          classTypeItemId = classTypeField.values[0].value.item_id;
+        }
+
+        if (classTypeItemId) {
+          eventsToProcess.push({ item: item });
         }
       });
     }
+
+    return Promise.all(eventsToProcess.map(function(e) {
+      var classTypeItemId = e.item.fields.find(function(f) { return f.field_id === 247306182; }).values[0].value.item_id;
+      return getClassTypeName(token, classTypeItemId).then(function(name) {
+        return { item: e.item, classTypeName: name };
+      });
+    }));
+  }).then(function(processedEvents) {
+    var trainerClasses = {};
+
+    processedEvents.forEach(function(e) {
+      if (e.classTypeName === 'Event') return;
+
+      var item = e.item;
+      var datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
+      var trainersField = item.fields.find(function(f) { return f.field_id === 232176709; });
+      var classNameField = item.fields.find(function(f) { return f.field_id === 202573663; });
+      var payrollField = item.fields.find(function(f) { return f.field_id === 278105426; });
+
+      var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
+      var startDate = new Date(datesField.values[0].start);
+      var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
+      var payrollDate = calculatePayrollDate(startDate);
+      var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
+
+      if (trainersField && trainersField.values) {
+        trainersField.values.forEach(function(tv) {
+          if (tv.value) {
+            var staffId = tv.value.item_id;
+            var trainerName = staffMap[staffId] || 'Unknown';
+            
+            if (!trainerClasses[trainerName]) {
+              trainerClasses[trainerName] = [];
+            }
+            
+            trainerClasses[trainerName].push({
+              className: className,
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              payrollDate: payrollDate.toISOString(),
+              isPaid: payrollValue === 'Paid'
+            });
+          }
+        });
+      }
+    });
 
     console.log('Final trainers:', Object.keys(trainerClasses).length);
 
