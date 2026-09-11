@@ -1,7 +1,8 @@
 const https = require('https');
 
-const PODIO_CLIENT_ID = process.env.PODIO_CLIENT_ID || 'class-trainer-payroll-tracker';
-const PODIO_CLIENT_SECRET = process.env.PODIO_CLIENT_SECRET || 'Mqi9SBNB9RJSxU2niY5vdplO5Sr4oxpX5LuI4LWsi9aPK3rhY1M7PiVWLs37Eynx';
+const CONTACT_APP_TOKEN = 'b1401a14d195dbc8115dd2ae9775bd29';
+const STAFF_APP_TOKEN = '30b2589559090efd1a6eaf887d8e2af5';
+const EVENTS_APP_TOKEN = '99095231209a438aa37611d28271a273';
 
 function makeRequest(options, body) {
   return new Promise(function(resolve, reject) {
@@ -19,21 +20,6 @@ function makeRequest(options, body) {
     req.on('error', reject);
     if (body) req.write(body);
     req.end();
-  });
-}
-
-function getPodioToken() {
-  var auth = Buffer.from(PODIO_CLIENT_ID + ':' + PODIO_CLIENT_SECRET).toString('base64');
-  return makeRequest({
-    hostname: 'api.podio.com',
-    path: '/oauth/token',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'Basic ' + auth
-    }
-  }, 'grant_type=client_credentials').then(function(response) {
-    return response.data.access_token;
   });
 }
 
@@ -68,105 +54,144 @@ module.exports = function(req, res) {
     return;
   }
 
-  getPodioToken().then(function(token) {
+  makeRequest({
+    hostname: 'api.podio.com',
+    path: '/app/30676083/filter',
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + CONTACT_APP_TOKEN }
+  }).then(function(contactResponse) {
+    console.log('Contact response status:', contactResponse.status);
+    
+    if (!contactResponse.data || !contactResponse.data.items) {
+      throw new Error('No contacts found');
+    }
+
+    var contact = null;
+    for (var i = 0; i < contactResponse.data.items.length; i++) {
+      var item = contactResponse.data.items[i];
+      if (!item.fields) continue;
+      for (var j = 0; j < item.fields.length; j++) {
+        var field = item.fields[j];
+        if (field.field_id === 276275551 && field.values && field.values[0]) {
+          if (field.values[0].value === name) {
+            contact = item;
+            break;
+          }
+        }
+      }
+      if (contact) break;
+    }
+
+    if (!contact) {
+      throw new Error('Contact not found');
+    }
+
+    return contact;
+  }).then(function(contact) {
     return makeRequest({
       hostname: 'api.podio.com',
-      path: '/app/30676083/filter?sort_by=created_on&sort_desc=1',
+      path: '/app/26863984/filter',
       method: 'GET',
-      headers: { 'Authorization': 'OAuth2 ' + token }
-    }).then(function(contactResponse) {
-      if (!contactResponse.data || !contactResponse.data.items || contactResponse.data.items.length === 0) {
-        throw new Error('No contacts found');
-      }
-
-      var contact = contactResponse.data.items.find(function(item) {
-        if (!item.fields) return false;
-        var nameField = item.fields.find(function(f) { return f.field_id === 276275551; });
-        if (!nameField || !nameField.values || !nameField.values[0]) return false;
-        return nameField.values[0].value === name;
-      });
-
-      if (!contact) {
-        throw new Error('Name not found');
-      }
-
-      return { token: token, contact: contact, name: name };
-    });
-  }).then(function(data) {
-    return makeRequest({
-      hostname: 'api.podio.com',
-      path: '/app/26863984/filter?sort_by=created_on&sort_desc=1',
-      method: 'GET',
-      headers: { 'Authorization': 'OAuth2 ' + data.token }
+      headers: { 'Authorization': 'Bearer ' + STAFF_APP_TOKEN }
     }).then(function(staffResponse) {
-      if (!staffResponse.data || !staffResponse.data.items || staffResponse.data.items.length === 0) {
+      if (!staffResponse.data || !staffResponse.data.items) {
         throw new Error('No staff found');
       }
 
-      var staff = staffResponse.data.items.find(function(item) {
-        if (!item.fields) return false;
-        var contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
-        if (!contactField || !contactField.values || !contactField.values[0]) return false;
-        if (!contactField.values[0].value) return false;
-        return contactField.values[0].value.item_id === data.contact.item_id;
-      });
+      var staff = null;
+      for (var i = 0; i < staffResponse.data.items.length; i++) {
+        var item = staffResponse.data.items[i];
+        if (!item.fields) continue;
+        for (var j = 0; j < item.fields.length; j++) {
+          var field = item.fields[j];
+          if (field.field_id === 276281378 && field.values && field.values[0]) {
+            if (field.values[0].value && field.values[0].value.item_id === contact.item_id) {
+              staff = item;
+              break;
+            }
+          }
+        }
+        if (staff) break;
+      }
 
       if (!staff) {
         throw new Error('Staff not found');
       }
 
-      return { token: data.token, staffId: staff.item_id, name: data.name };
+      return { staffId: staff.item_id, contactName: name };
     });
-  }).then(function(data) {
+  }).then(function(staffData) {
     return makeRequest({
       hostname: 'api.podio.com',
-      path: '/app/24013170/filter?sort_by=created_on&sort_desc=1',
+      path: '/app/24013170/filter',
       method: 'GET',
-      headers: { 'Authorization': 'OAuth2 ' + data.token }
+      headers: { 'Authorization': 'Bearer ' + EVENTS_APP_TOKEN }
     }).then(function(classResponse) {
       if (!classResponse.data || !classResponse.data.items) {
-        res.status(200).json({ success: true, trainerName: data.name, classes: [] });
+        res.status(200).json({ success: true, trainerName: staffData.contactName, classes: [] });
         return;
       }
 
       var thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      var classes = classResponse.data.items.filter(function(item) {
-        if (!item.fields) return false;
-        var datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
-        var trainersField = item.fields.find(function(f) { return f.field_id === 232176709; });
-        if (!datesField || !datesField.values || !datesField.values[0]) return false;
-        if (!trainersField || !trainersField.values) return false;
-        var startDate = new Date(datesField.values[0].start);
-        if (startDate < thirtyDaysAgo) return false;
-        return trainersField.values.some(function(tv) { return tv.value && tv.value.item_id === data.staffId; });
-      }).map(function(item) {
-        var datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
-        var classNameField = item.fields.find(function(f) { return f.field_id === 202573663; });
-        var payrollField = item.fields.find(function(f) { return f.field_id === 278105426; });
-        
-        var dateRange = datesField.values[0];
-        var startDate = new Date(dateRange.start);
-        var endDate = dateRange.end ? new Date(dateRange.end) : startDate;
-        var payrollDate = calculatePayrollDate(startDate);
-        var payrollValue = (payrollField && payrollField.values && payrollField.values[0]) ? (payrollField.values[0].text || payrollField.values[0].value || '') : '';
+      var classes = [];
+      for (var i = 0; i < classResponse.data.items.length; i++) {
+        var item = classResponse.data.items[i];
+        if (!item.fields) continue;
 
-        return {
-          className: (classNameField && classNameField.values && classNameField.values[0]) ? classNameField.values[0].value : 'Class',
+        var datesField = null;
+        var trainersField = null;
+        var classNameField = null;
+        var payrollField = null;
+
+        for (var j = 0; j < item.fields.length; j++) {
+          var field = item.fields[j];
+          if (field.field_id === 201834925) datesField = field;
+          if (field.field_id === 232176709) trainersField = field;
+          if (field.field_id === 202573663) classNameField = field;
+          if (field.field_id === 278105426) payrollField = field;
+        }
+
+        if (!datesField || !datesField.values) continue;
+        if (!trainersField || !trainersField.values) continue;
+
+        var startDate = new Date(datesField.values[0].start);
+        if (startDate < thirtyDaysAgo) continue;
+
+        var trainerMatch = false;
+        for (var k = 0; k < trainersField.values.length; k++) {
+          if (trainersField.values[k].value && trainersField.values[k].value.item_id === staffData.staffId) {
+            trainerMatch = true;
+            break;
+          }
+        }
+
+        if (!trainerMatch) continue;
+
+        var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
+        var payrollDate = calculatePayrollDate(startDate);
+        var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : '';
+
+        var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
+
+        classes.push({
+          className: className,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
           payrollDate: payrollDate.toISOString(),
           isPaid: payrollValue === 'Paid'
-        };
-      }).sort(function(a, b) {
+        });
+      }
+
+      classes.sort(function(a, b) {
         return new Date(b.startDate) - new Date(a.startDate);
       });
 
-      res.status(200).json({ success: true, trainerName: data.name, classes: classes });
+      res.status(200).json({ success: true, trainerName: staffData.contactName, classes: classes });
     });
   }).catch(function(error) {
-    console.error('Error:', error);
+    console.error('Error:', error.message);
     res.status(500).json({ error: error.message });
   });
 };
