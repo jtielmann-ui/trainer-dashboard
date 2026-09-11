@@ -1,16 +1,4 @@
 {
-  "buildCommand": "echo 'No build needed'",
-  "outputDirectory": ".",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
+  "buildCommand": "exit 0",
+  "outputDirectory": "."
 }
