@@ -70,26 +70,49 @@ module.exports = async function(req, res) {
 
     const token = await getPodioToken();
 
-    const trainerResponse = await makeRequest({
+    // Step 1: Find contact by email in Contact App (30676083)
+    const contactResponse = await makeRequest({
       hostname: 'api.podio.com',
       path: '/app/30676083/filter?sort_by=created_on&sort_desc=1',
       method: 'GET',
       headers: { 'Authorization': 'OAuth2 ' + token }
     });
 
-    const trainer = trainerResponse.data.items.find(function(item) {
+    const contact = contactResponse.data.items.find(function(item) {
       const emailField = item.fields.find(function(f) { return f.field_id === 276974029; });
       return emailField && emailField.values && emailField.values[0] && emailField.values[0].value === email;
     });
 
-    if (!trainer) {
-      res.status(401).json({ error: 'Trainer not found' });
+    if (!contact) {
+      res.status(401).json({ error: 'Email not found' });
       return;
     }
 
-    const nameField = trainer.fields.find(function(f) { return f.field_id === 276275551; });
-    const name = (nameField && nameField.values && nameField.values[0]) ? nameField.values[0].value : email;
+    const contactName = contact.fields.find(function(f) { return f.field_id === 276275551; });
+    const name = (contactName && contactName.values && contactName.values[0]) ? contactName.values[0].value : email;
+    const contactItemId = contact.item_id;
 
+    // Step 2: Find staff that references this contact in Staff App (26863984)
+    const staffResponse = await makeRequest({
+      hostname: 'api.podio.com',
+      path: '/app/26863984/filter?sort_by=created_on&sort_desc=1',
+      method: 'GET',
+      headers: { 'Authorization': 'OAuth2 ' + token }
+    });
+
+    const staff = staffResponse.data.items.find(function(item) {
+      const contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
+      return contactField && contactField.values && contactField.values[0] && contactField.values[0].value && contactField.values[0].value.item_id === contactItemId;
+    });
+
+    if (!staff) {
+      res.status(401).json({ error: 'Staff record not found' });
+      return;
+    }
+
+    const staffItemId = staff.item_id;
+
+    // Step 3: Find events that reference this staff in Events App (24013170)
     const classResponse = await makeRequest({
       hostname: 'api.podio.com',
       path: '/app/24013170/filter?sort_by=created_on&sort_desc=1',
@@ -106,7 +129,7 @@ module.exports = async function(req, res) {
       if (!datesField || !trainersField) return false;
       const startDate = new Date(datesField.values[0].start);
       if (startDate < thirtyDaysAgo) return false;
-      return trainersField.values.some(function(tv) { return tv.value && tv.value.item_id === trainer.item_id; });
+      return trainersField.values.some(function(tv) { return tv.value && tv.value.item_id === staffItemId; });
     }).map(function(item) {
       const datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
       const classNameField = item.fields.find(function(f) { return f.field_id === 202573663; });
