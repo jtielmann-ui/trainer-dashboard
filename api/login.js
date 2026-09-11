@@ -123,17 +123,17 @@ module.exports = function(req, res) {
         if (!datesField || !datesField.values) return;
 
         var startDate = new Date(datesField.values[0].start);
-        startDate.setDate(startDate.getDate() + 1);
+        startDate.setDate(startDate.getDate() - 1);
         
         if (startDate >= today) return;
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
 
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
-        endDate.setDate(endDate.getDate() + 1);
+        endDate.setDate(endDate.getDate() - 1);
         
         var payrollDate = calculatePayrollDate(startDate);
-        payrollDate.setDate(payrollDate.getDate() + 1);
+        payrollDate.setDate(payrollDate.getDate() - 1);
         
         var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
 
