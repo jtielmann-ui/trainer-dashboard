@@ -44,26 +44,11 @@ function getPodioAccessToken() {
   });
 }
 
-function parseLocalDate(dateString) {
-  var parts = dateString.split('-');
-  var year = parseInt(parts[0], 10);
-  var month = parseInt(parts[1], 10) - 1;
-  var day = parseInt(parts[2], 10);
-  var date = new Date(year, month, day, 0, 0, 0, 0);
-  return date;
-}
-
-function dateToLocalString(date) {
-  var year = date.getFullYear();
-  var month = String(date.getMonth() + 1).padStart(2, '0');
-  var day = String(date.getDate()).padStart(2, '0');
-  return year + '-' + month + '-' + day;
-}
-
 function calculatePayrollDate(classDate) {
   var basePayroll = new Date(2026, 8, 16);
+  var classDateObj = new Date(classDate);
   var payrollDate = new Date(basePayroll);
-  while (payrollDate < classDate) {
+  while (payrollDate < classDateObj) {
     payrollDate.setDate(payrollDate.getDate() + 14);
   }
   return payrollDate;
@@ -99,10 +84,6 @@ module.exports = function(req, res) {
     var staffData = responses[0].data;
     var contactData = responses[1].data;
     var eventsData = responses[2].data;
-
-    console.log('Staff items:', staffData.items ? staffData.items.length : 0);
-    console.log('Contact items:', contactData.items ? contactData.items.length : 0);
-    console.log('ALL Events items:', eventsData.items ? eventsData.items.length : 0);
 
     var contactMap = {};
     if (contactData.items) {
@@ -141,13 +122,19 @@ module.exports = function(req, res) {
 
         if (!datesField || !datesField.values) return;
 
-        var startDate = parseLocalDate(datesField.values[0].start);
+        var startDate = new Date(datesField.values[0].start);
+        startDate.setDate(startDate.getDate() + 1);
+        
         if (startDate >= today) return;
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
 
-        var endDate = datesField.values[0].end ? parseLocalDate(datesField.values[0].end) : startDate;
+        var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
+        endDate.setDate(endDate.getDate() + 1);
+        
         var payrollDate = calculatePayrollDate(startDate);
+        payrollDate.setDate(payrollDate.getDate() + 1);
+        
         var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
 
         var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
@@ -164,9 +151,9 @@ module.exports = function(req, res) {
               
               trainerClasses[trainerName].push({
                 className: className,
-                startDate: dateToLocalString(startDate),
-                endDate: dateToLocalString(endDate),
-                payrollDate: dateToLocalString(payrollDate),
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                payrollDate: payrollDate.toISOString(),
                 isPaid: payrollValue === 'Paid'
               });
             }
@@ -174,8 +161,6 @@ module.exports = function(req, res) {
         }
       });
     }
-
-    console.log('Final trainers:', Object.keys(trainerClasses).length);
 
     res.status(200).json({ success: true, trainerClasses: trainerClasses });
   }).catch(function(error) {
