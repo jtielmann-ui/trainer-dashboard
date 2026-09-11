@@ -45,10 +45,9 @@ function getPodioAccessToken() {
 }
 
 function calculatePayrollDate(classDate) {
-  var basePayroll = new Date(2026, 8, 16);
-  var classDateObj = new Date(classDate);
+  var basePayroll = new Date(2026, 8, 4);
   var payrollDate = new Date(basePayroll);
-  while (payrollDate < classDateObj) {
+  while (payrollDate <= classDate || (payrollDate - classDate) / (1000 * 60 * 60 * 24) <= 6) {
     payrollDate.setDate(payrollDate.getDate() + 14);
   }
   return payrollDate;
