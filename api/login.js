@@ -100,7 +100,7 @@ module.exports = function(req, res) {
         var contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
         if (contactField && contactField.values && contactField.values[0] && contactField.values[0].value) {
           var contactId = contactField.values[0].value.item_id;
-          staffMap[item.item_id] = contactMap[contactId] || 'Unknown';
+          staffMap[item.item_id] = contactMap[contactId] || 'Past 30-days of Classes';
         }
       });
     }
