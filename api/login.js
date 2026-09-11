@@ -129,7 +129,17 @@ module.exports = function(req, res) {
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
         
-        var payrollValue = payrollField && payrollField.values && payrollField.values[0] ? (payrollField.values[0].text || payrollField.values[0].value || '') : 'Pending';
+        var payrollValue = '';
+        if (payrollField && payrollField.values && payrollField.values[0]) {
+          if (payrollField.values[0].text) {
+            payrollValue = payrollField.values[0].text;
+          } else if (payrollField.values[0].value) {
+            payrollValue = payrollField.values[0].value;
+          }
+          console.log('Payroll field for', className, ':', JSON.stringify(payrollField.values[0]));
+        } else {
+          payrollValue = 'Pending';
+        }
 
         var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
 
