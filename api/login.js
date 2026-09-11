@@ -131,12 +131,12 @@ module.exports = function(req, res) {
         
         var payrollValue = '';
         if (payrollField && payrollField.values && payrollField.values[0]) {
+          console.log('Payroll field raw:', JSON.stringify(payrollField.values[0]));
           if (payrollField.values[0].text) {
             payrollValue = payrollField.values[0].text;
           } else if (payrollField.values[0].value) {
             payrollValue = payrollField.values[0].value;
           }
-          console.log('Payroll field for', className, ':', JSON.stringify(payrollField.values[0]));
         } else {
           payrollValue = 'Pending';
         }
