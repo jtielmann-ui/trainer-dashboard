@@ -76,10 +76,9 @@ module.exports = function(req, res) {
         'Content-Type': 'application/json',
         'Authorization': 'OAuth2 ' + token
       }, JSON.stringify({})),
-      makeRequest('api.podio.com', '/item/app/24013170/filter/', 'POST', {
-        'Content-Type': 'application/json',
+      makeRequest('api.podio.com', '/item/app/24013170/', 'GET', {
         'Authorization': 'OAuth2 ' + token
-      }, JSON.stringify({ limit: 1000 }))
+      })
     ]);
   }).then(function(responses) {
     var staffData = responses[0].data;
@@ -113,6 +112,10 @@ module.exports = function(req, res) {
 
     var today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    var afterDateFilter = 0;
+    var afterStatusFilter = 0;
+    var afterClassTypeFilter = 0;
 
     var trainerClasses = {};
 
@@ -131,14 +134,18 @@ module.exports = function(req, res) {
         startDate.setHours(0, 0, 0, 0);
 
         if (startDate >= today) return;
+        afterDateFilter++;
 
         var statusText = null;
         if (statusField && statusField.values && statusField.values[0]) {
           statusText = statusField.values[0].value || statusField.values[0].text;
         }
+        console.log('Event status: ' + (statusText || 'null'));
         if (statusText !== 'Private Client' && statusText !== 'Open') return;
+        afterStatusFilter++;
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
+        afterClassTypeFilter++;
 
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
@@ -169,6 +176,9 @@ module.exports = function(req, res) {
       });
     }
 
+    console.log('After date filter (past only):', afterDateFilter);
+    console.log('After status filter:', afterStatusFilter);
+    console.log('After class type filter:', afterClassTypeFilter);
     console.log('Final trainers:', Object.keys(trainerClasses).length);
 
     res.status(200).json({ success: true, trainerClasses: trainerClasses });
