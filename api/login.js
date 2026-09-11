@@ -70,7 +70,7 @@ module.exports = async function(req, res) {
 
     const token = await getPodioToken();
 
-    // Step 1: Find contact by email in Contact App (30676083)
+    // Step 1: Find contact by email
     const contactResponse = await makeRequest({
       hostname: 'api.podio.com',
       path: '/app/30676083/filter?sort_by=created_on&sort_desc=1',
@@ -78,13 +78,20 @@ module.exports = async function(req, res) {
       headers: { 'Authorization': 'OAuth2 ' + token }
     });
 
+    if (!contactResponse.data || !contactResponse.data.items || contactResponse.data.items.length === 0) {
+      res.status(401).json({ error: 'No contacts found' });
+      return;
+    }
+
     const contact = contactResponse.data.items.find(function(item) {
+      if (!item.fields) return false;
       const emailField = item.fields.find(function(f) { return f.field_id === 276974029; });
-      return emailField && emailField.values && emailField.values[0] && emailField.values[0].value === email;
+      if (!emailField || !emailField.values || !emailField.values[0]) return false;
+      return emailField.values[0].value === email;
     });
 
     if (!contact) {
-      res.status(401).json({ error: 'Email not found' });
+      res.status(401).json({ error: 'Email not found in contacts' });
       return;
     }
 
@@ -92,7 +99,7 @@ module.exports = async function(req, res) {
     const name = (contactName && contactName.values && contactName.values[0]) ? contactName.values[0].value : email;
     const contactItemId = contact.item_id;
 
-    // Step 2: Find staff that references this contact in Staff App (26863984)
+    // Step 2: Find staff that references this contact
     const staffResponse = await makeRequest({
       hostname: 'api.podio.com',
       path: '/app/26863984/filter?sort_by=created_on&sort_desc=1',
@@ -100,19 +107,27 @@ module.exports = async function(req, res) {
       headers: { 'Authorization': 'OAuth2 ' + token }
     });
 
+    if (!staffResponse.data || !staffResponse.data.items || staffResponse.data.items.length === 0) {
+      res.status(401).json({ error: 'No staff found' });
+      return;
+    }
+
     const staff = staffResponse.data.items.find(function(item) {
+      if (!item.fields) return false;
       const contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
-      return contactField && contactField.values && contactField.values[0] && contactField.values[0].value && contactField.values[0].value.item_id === contactItemId;
+      if (!contactField || !contactField.values || !contactField.values[0]) return false;
+      if (!contactField.values[0].value) return false;
+      return contactField.values[0].value.item_id === contactItemId;
     });
 
     if (!staff) {
-      res.status(401).json({ error: 'Staff record not found' });
+      res.status(401).json({ error: 'Staff record not found for this contact' });
       return;
     }
 
     const staffItemId = staff.item_id;
 
-    // Step 3: Find events that reference this staff in Events App (24013170)
+    // Step 3: Find events that reference this staff
     const classResponse = await makeRequest({
       hostname: 'api.podio.com',
       path: '/app/24013170/filter?sort_by=created_on&sort_desc=1',
@@ -120,13 +135,20 @@ module.exports = async function(req, res) {
       headers: { 'Authorization': 'OAuth2 ' + token }
     });
 
+    if (!classResponse.data || !classResponse.data.items) {
+      res.status(200).json({ success: true, trainerName: name, classes: [] });
+      return;
+    }
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const classes = classResponse.data.items.filter(function(item) {
+      if (!item.fields) return false;
       const datesField = item.fields.find(function(f) { return f.field_id === 201834925; });
       const trainersField = item.fields.find(function(f) { return f.field_id === 232176709; });
-      if (!datesField || !trainersField) return false;
+      if (!datesField || !datesField.values || !datesField.values[0]) return false;
+      if (!trainersField || !trainersField.values) return false;
       const startDate = new Date(datesField.values[0].start);
       if (startDate < thirtyDaysAgo) return false;
       return trainersField.values.some(function(tv) { return tv.value && tv.value.item_id === staffItemId; });
