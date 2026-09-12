@@ -122,7 +122,7 @@ module.exports = function(req, res) {
     thirtyDaysAgo.setHours(0, 0, 0, 0);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    var trainerClasses = {};
+    var uniqueClasses = {};
 
     if (eventsData.items) {
       eventsData.items.forEach(function(item) {
@@ -163,30 +163,20 @@ module.exports = function(req, res) {
 
         var className = classNameField && classNameField.values && classNameField.values[0] ? classNameField.values[0].value : 'Class';
 
-        if (trainersField && trainersField.values) {
-          trainersField.values.forEach(function(tv) {
-            if (tv.value) {
-              var staffId = tv.value.item_id;
-              var trainerName = staffMap[staffId] || 'Unknown';
-              
-              if (!trainerClasses[trainerName]) {
-                trainerClasses[trainerName] = [];
-              }
-              
-              trainerClasses[trainerName].push({
-                className: className,
-                startDate: startDate.toISOString(),
-                endDate: endDate.toISOString(),
-                payrollDate: payrollDate.toISOString(),
-                isPaid: payrollValue === 'Paid'
-              });
-            }
-          });
+        var classId = item.item_id;
+        if (!uniqueClasses[classId]) {
+          uniqueClasses[classId] = {
+            className: className,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            payrollDate: payrollDate.toISOString(),
+            isPaid: payrollValue === 'Paid'
+          };
         }
       });
     }
 
-    res.status(200).json({ success: true, trainerClasses: trainerClasses });
+    res.status(200).json({ success: true, trainerClasses: uniqueClasses });
   }).catch(function(error) {
     console.error('Error:', error.message);
     res.status(500).json({ error: error.message });
