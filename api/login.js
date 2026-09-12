@@ -75,7 +75,7 @@ module.exports = function(req, res) {
         'Content-Type': 'application/json',
         'Authorization': 'OAuth2 ' + token
       }, JSON.stringify({})),
-      makeRequest('api.podio.com', '/item/app/24013170/?limit=100&sort_by=created_on&sort_order=desc', 'GET', {
+      makeRequest('api.podio.com', '/item/app/24013170/?limit=100', 'GET', {
         'Authorization': 'OAuth2 ' + token
       })
     ]);
