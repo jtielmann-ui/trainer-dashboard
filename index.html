@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Tracker - All Classes</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .date-section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .date-header {
+      font-size: 18px;
+      font-weight: 600;
+      color: #0066cc;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: #f9f9f9;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #ddd;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    tr:hover {
+      background: #f9f9f9;
+    }
+
+    .status-paid {
+      background: #d4edda;
+      color: #155724;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .status-pending {
+      background: #fff3cd;
+      color: #856404;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+
+    .no-classes {
+      color: #999;
+      padding: 15px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Class Tracker - Past 30 Days</h1>
+    <div id="content">
+      <div class="loading">Loading classes...</div>
+    </div>
+  </div>
+
+  <script>
+    function formatDate(dateStr) {
+      var date = new Date(dateStr);
+      date.setDate(date.getDate() + 1);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function formatDateKey(dateStr) {
+      var date = new Date(dateStr);
+      date.setDate(date.getDate() + 1);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+
+    async function loadData() {
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        const classes = result.trainerClasses;
+        const classArray = Object.values(classes);
+
+        // Group by end date
+        const grouped = {};
+        classArray.forEach(c => {
+          const dateKey = formatDateKey(c.endDate);
+          if (!grouped[dateKey]) {
+            grouped[dateKey] = [];
+          }
+          grouped[dateKey].push(c);
+        });
+
+        // Sort dates in descending order
+        const sortedDates = Object.keys(grouped).sort((a, b) => {
+          const dateA = new Date(grouped[a][0].endDate);
+          const dateB = new Date(grouped[b][0].endDate);
+          return dateB - dateA;
+        });
+
+        const html = sortedDates.map(dateKey => {
+          const tableRows = grouped[dateKey]
+            .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
+            .map(c => `
+            <tr>
+              <td>${c.className}</td>
+              <td>${formatDate(c.startDate)}</td>
+              <td>${formatDate(c.endDate)}</td>
+              <td>${formatDate(c.payrollDate)}</td>
+              <td><span class="status-${c.isPaid ? 'paid' : 'pending'}">${c.isPaid ? 'Paid' : 'Pending'}</span></td>
+            </tr>
+          `).join('');
+
+          return `
+            <div class="date-section">
+              <div class="date-header">${dateKey}</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Payroll Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tableRows}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById('content').innerHTML = html || '<div class="no-classes">No classes found</div>';
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('content').innerHTML = '<div class="error">Error loading data: ' + error.message + '</div>';
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
