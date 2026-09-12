@@ -75,7 +75,7 @@ module.exports = function(req, res) {
         'Content-Type': 'application/json',
         'Authorization': 'OAuth2 ' + token
       }, JSON.stringify({})),
-      makeRequest('api.podio.com', '/item/app/24013170/', 'GET', {
+      makeRequest('api.podio.com', '/item/app/24013170/?limit=50', 'GET', {
         'Authorization': 'OAuth2 ' + token
       })
     ]);
@@ -118,6 +118,10 @@ module.exports = function(req, res) {
     var today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
     var trainerClasses = {};
 
     if (eventsData.items) {
@@ -133,6 +137,7 @@ module.exports = function(req, res) {
 
         var startDate = new Date(datesField.values[0].start);
         if (startDate >= today) return;
+        if (startDate < thirtyDaysAgo) return;
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
 
