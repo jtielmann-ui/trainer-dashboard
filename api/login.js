@@ -100,7 +100,7 @@ module.exports = function(req, res) {
         var contactField = item.fields.find(function(f) { return f.field_id === 276281378; });
         if (contactField && contactField.values && contactField.values[0] && contactField.values[0].value) {
           var contactId = contactField.values[0].value.item_id;
-          staffMap[item.item_id] = contactMap[contactId] || 'Past 30-days of Classes';
+          staffMap[item.item_id] = contactMap[contactId] || 'Unknown';
         }
       });
     }
@@ -148,7 +148,7 @@ module.exports = function(req, res) {
           trainersField.values.forEach(function(tv) {
             if (tv.value) {
               var staffId = tv.value.item_id;
-              var trainerName = staffMap[staffId] || 'Past 30-days of Classes';
+              var trainerName = staffMap[staffId] || 'Unknown';
               
               if (!trainerClasses[trainerName]) {
                 trainerClasses[trainerName] = [];
