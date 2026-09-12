@@ -75,7 +75,7 @@ module.exports = function(req, res) {
         'Content-Type': 'application/json',
         'Authorization': 'OAuth2 ' + token
       }, JSON.stringify({})),
-      makeRequest('api.podio.com', '/item/app/24013170/', 'GET', {
+      makeRequest('api.podio.com', '/item/app/24013170?limit=100', 'GET', {
         'Authorization': 'OAuth2 ' + token
       })
     ]);
@@ -83,6 +83,16 @@ module.exports = function(req, res) {
     var staffData = responses[0].data;
     var contactData = responses[1].data;
     var eventsData = responses[2].data;
+
+    console.log('Staff items:', staffData.items ? staffData.items.length : 0);
+    console.log('Contact items:', contactData.items ? contactData.items.length : 0);
+    console.log('Events items returned:', eventsData.items ? eventsData.items.length : 0);
+    if (eventsData.items && eventsData.items.length > 0) {
+      var firstDatesField = eventsData.items[0].fields.find(function(f) { return f.field_id === 201834925; });
+      var lastDatesField = eventsData.items[eventsData.items.length - 1].fields.find(function(f) { return f.field_id === 201834925; });
+      if (firstDatesField && firstDatesField.values) console.log('First item date:', firstDatesField.values[0].start);
+      if (lastDatesField && lastDatesField.values) console.log('Last item date:', lastDatesField.values[0].start);
+    }
 
     var contactMap = {};
     if (contactData.items) {
@@ -101,7 +111,6 @@ module.exports = function(req, res) {
         if (contactField && contactField.values && contactField.values[0] && contactField.values[0].value) {
           var contactId = contactField.values[0].value.item_id;
           staffMap[item.item_id] = contactMap[contactId] || 'Unknown';
-          staffMap[item.item_id] = contactMap[contactId] || 'Past 30-days of Classes';
         }
       });
     }
@@ -129,7 +138,7 @@ module.exports = function(req, res) {
 
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
-
+        
         var payrollValue = '';
         if (payrollField && payrollField.values && payrollField.values[0]) {
           if (payrollField.values[0].value && payrollField.values[0].value.text) {
@@ -149,12 +158,12 @@ module.exports = function(req, res) {
           trainersField.values.forEach(function(tv) {
             if (tv.value) {
               var staffId = tv.value.item_id;
-              var trainerName = staffMap[staffId] || 'Past 30-days of Classes';
-
+              var trainerName = staffMap[staffId] || 'Unknown';
+              
               if (!trainerClasses[trainerName]) {
                 trainerClasses[trainerName] = [];
               }
-
+              
               trainerClasses[trainerName].push({
                 className: className,
                 startDate: startDate.toISOString(),
