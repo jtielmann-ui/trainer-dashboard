@@ -140,6 +140,10 @@ module.exports = function(req, res) {
         if (startDate < thirtyDaysAgo) return;
 
         if (!classTypeField || !classTypeField.values || !classTypeField.values[0]) return;
+        
+        if (!statusField || !statusField.values || !statusField.values[0]) return;
+        var statusText = statusField.values[0].value && statusField.values[0].value.text ? statusField.values[0].value.text : statusField.values[0].text || '';
+        if (statusText !== 'Open' && statusText !== 'Private Client') return;
 
         var endDate = datesField.values[0].end ? new Date(datesField.values[0].end) : startDate;
         var payrollDate = calculatePayrollDate(startDate);
